@@ -4,12 +4,33 @@ import type { User } from '@prisma/client'
 import { createHash, randomUUID } from 'node:crypto'
 import { prisma } from './prisma.js'
 import { config } from './config.js'
+import type { Request, Response } from 'express'
 
 export const REFRESH_COOKIE = 'sports_center_refresh'
 const accessTtlSeconds = 60 * 60
 const refreshTtlMs = 7 * 24 * 60 * 60 * 1000
 
 type UserWithRole = User & { role: { name: string } }
+
+export function requireMember(request: Request, response: Response, forbiddenMessage = 'Chỉ thành viên mới được sử dụng chức năng này') {
+  const authorization = request.header('authorization')
+  if (!authorization?.startsWith('Bearer ')) {
+    response.status(401).json({ code: 'UNAUTHENTICATED', message: 'Cần đăng nhập' })
+    return null
+  }
+  try {
+    const payload = jwt.verify(authorization.slice(7), config.accessSecret) as jwt.JwtPayload & { sub?: string; role?: string }
+    const memberId = Number(payload.sub)
+    if (!payload.sub || !Number.isSafeInteger(memberId) || memberId <= 0 || payload.role !== 'MEMBER') {
+      response.status(403).json({ code: 'MEMBER_ACCESS_REQUIRED', message: forbiddenMessage })
+      return null
+    }
+    return memberId
+  } catch {
+    response.status(401).json({ code: 'INVALID_ACCESS_TOKEN', message: 'Access token không hợp lệ hoặc đã hết hạn' })
+    return null
+  }
+}
 
 export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex')

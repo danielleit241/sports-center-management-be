@@ -5,7 +5,7 @@ import jwt from 'jsonwebtoken'
 import swaggerUi from 'swagger-ui-express'
 import { z } from 'zod'
 import { config } from './config.js'
-import { findUser, issueSession, REFRESH_COOKIE, revokeRefreshToken, rotateRefreshToken, verifyPassword } from './auth.js'
+import { findUser, issueSession, REFRESH_COOKIE, requireMember, revokeRefreshToken, rotateRefreshToken, verifyPassword } from './auth.js'
 import { prisma } from './prisma.js'
 import { openapiDocument } from './openapi.js'
 import {
@@ -15,6 +15,7 @@ import {
   serializeBenefits,
   updatePackageSchema,
 } from './packages.js'
+import { membershipRouter } from './memberships/routes.js'
 
 const app = express()
 app.use(express.json())
@@ -35,25 +36,6 @@ const loginSchema = z.object({ identifier: z.string().min(1), password: z.string
 
 function publicUser(user: { id: number; email: string; phone: string | null; displayName: string; role: { name: string } }) {
   return { id: user.id, email: user.email, phone: user.phone, displayName: user.displayName, role: user.role.name }
-}
-
-function requireMember(request: express.Request, response: express.Response) {
-  const authorization = request.header('authorization')
-  if (!authorization?.startsWith('Bearer ')) {
-    response.status(401).json({ code: 'UNAUTHENTICATED', message: 'Cần đăng nhập' })
-    return null
-  }
-  try {
-    const payload = jwt.verify(authorization.slice(7), config.accessSecret) as jwt.JwtPayload & { sub?: string; role?: string }
-    if (!payload.sub || payload.role !== 'MEMBER') {
-      response.status(403).json({ code: 'MEMBER_ACCESS_REQUIRED', message: 'Chỉ thành viên mới được đăng ký lớp' })
-      return null
-    }
-    return Number(payload.sub)
-  } catch {
-    response.status(401).json({ code: 'INVALID_ACCESS_TOKEN', message: 'Access token không hợp lệ hoặc đã hết hạn' })
-    return null
-  }
 }
 
 app.get('/health', (_request, response) => response.json({ status: 'ok' }))
@@ -88,8 +70,10 @@ app.post('/api/auth/logout', async (request, response) => {
   return response.status(204).send()
 })
 
+app.use('/api/memberships', membershipRouter)
+
 app.get('/api/classes', async (request, response) => {
-  const memberId = requireMember(request, response)
+  const memberId = requireMember(request, response, 'Chỉ thành viên mới được đăng ký lớp')
   if (!memberId) return
   const classes = await prisma.classSchedule.findMany({
     where: { status: 'OPEN', startTime: { gt: new Date() } },
@@ -111,7 +95,7 @@ app.get('/api/classes', async (request, response) => {
 const registrationSchema = z.object({ classId: z.coerce.number().int().positive() })
 
 app.post('/api/class-registrations', async (request, response) => {
-  const memberId = requireMember(request, response)
+  const memberId = requireMember(request, response, 'Chỉ thành viên mới được đăng ký lớp')
   if (!memberId) return
   const parsed = registrationSchema.safeParse(request.body)
   if (!parsed.success) return response.status(422).json({ code: 'VALIDATION_ERROR', message: 'classId không hợp lệ', details: parsed.error.flatten() })
@@ -176,11 +160,11 @@ app.get('/api/packages', async (request, response) => {
   const { status, sportType, search } = request.query
   const where: Record<string, unknown> = {}
 
-  if (typeof status === 'string' && status !== 'ALL') {
-    where.status = status
-  } else if (!isManager) {
-    // Non-managers only see ACTIVE packages
+  if (!isManager) {
+    // Public and member catalogs always expose active packages only.
     where.status = 'ACTIVE'
+  } else if (typeof status === 'string' && status !== 'ALL') {
+    where.status = status
   } else if (status !== 'ALL') {
     // Manager default shows ACTIVE and INACTIVE (not ARCHIVED) unless specified
     where.status = { in: ['ACTIVE', 'INACTIVE'] }

@@ -91,13 +91,17 @@ model MembershipPackage {
 }
 
 model Membership {
-  id        Int              @id @default(autoincrement())
-  userId    Int
-  packageId Int?
-  startDate DateTime
-  endDate   DateTime
-  status    MembershipStatus @default(ACTIVE)
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                    Int              @id @default(autoincrement())
+  userId                Int
+  packageId             Int?
+  packageNameSnapshot   String?
+  sportTypeSnapshot     String?
+  durationDaysSnapshot  Int?
+  listedPriceSnapshot   Int?
+  startDate             DateTime
+  endDate               DateTime
+  status                MembershipStatus @default(ACTIVE)
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   package   MembershipPackage? @relation(fields: [packageId], references: [id], onDelete: SetNull)
   createdAt DateTime         @default(now())
 
