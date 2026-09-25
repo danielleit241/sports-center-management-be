@@ -11,6 +11,7 @@ export const openapiDocument = {
     { name: 'Authentication', description: 'Đăng nhập và quản lý session' },
     { name: 'Class registration', description: 'Danh sách và đăng ký lớp học cho member' },
     { name: 'Package management', description: 'Cấu hình danh mục gói tập và thời hạn sử dụng (FR-003)' },
+    { name: 'Membership subscription', description: 'Đăng ký và xem lịch sử gói tập của member' },
   ],
   components: {
     securitySchemes: {
@@ -40,6 +41,16 @@ export const openapiDocument = {
         type: 'object',
         properties: { id: { type: 'integer' }, classId: { type: 'integer' }, status: { type: 'string', example: 'CONFIRMED' }, registeredAt: { type: 'string', format: 'date-time' } },
       },
+      Membership: {
+        type: 'object', required: ['id', 'packageId', 'packageName', 'sportType', 'durationDays', 'listedPrice', 'startDate', 'endDate', 'status'],
+        properties: {
+          id: { type: 'integer' }, packageId: { type: 'integer', nullable: true }, packageName: { type: 'string', nullable: true },
+          sportType: { type: 'string', nullable: true }, durationDays: { type: 'integer', nullable: true }, listedPrice: { type: 'integer', nullable: true },
+          startDate: { type: 'string', format: 'date-time' }, endDate: { type: 'string', format: 'date-time' },
+          status: { type: 'string', enum: ['ACTIVE', 'EXPIRED', 'CANCELLED'] },
+        },
+      },
+      MembershipRegistrationRequest: { type: 'object', required: ['packageId'], properties: { packageId: { type: 'integer', minimum: 1, example: 2 } } },
       MembershipPackage: {
         type: 'object',
         properties: {
@@ -117,6 +128,17 @@ export const openapiDocument = {
         tags: ['Class registration'], summary: 'Đăng ký lớp học', description: 'Kiểm tra gói tập còn hiệu lực, không trùng lịch và còn slot.', security: [{ bearerAuth: [] }],
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/RegistrationRequest' } } } },
         responses: { '201': { description: 'Đăng ký thành công', content: { 'application/json': { schema: { $ref: '#/components/schemas/Registration' } } } }, '403': { description: 'Gói tập hết hạn hoặc không đủ quyền' }, '409': { description: 'Lớp đầy, trùng lịch hoặc đã đăng ký' }, '422': { description: 'Dữ liệu không hợp lệ' } },
+      },
+    },
+    '/api/memberships': {
+      get: {
+        tags: ['Membership subscription'], summary: 'Lấy membership của member hiện tại', security: [{ bearerAuth: [] }],
+        responses: { '200': { description: 'Lịch sử membership mới nhất trước', content: { 'application/json': { schema: { type: 'array', items: { $ref: '#/components/schemas/Membership' } } } } }, '401': { description: 'Chưa đăng nhập' }, '403': { description: 'Chỉ member được truy cập' } },
+      },
+      post: {
+        tags: ['Membership subscription'], summary: 'Đăng ký gói tập và kích hoạt ngay', description: 'Không thu hoặc xác minh thanh toán trong hệ thống. Gói cùng bộ môn đang còn hiệu lực bị chặn; Toàn diện xung đột mọi bộ môn.', security: [{ bearerAuth: [] }],
+        requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/MembershipRegistrationRequest' } } } },
+        responses: { '201': { description: 'Đã kích hoạt membership', content: { 'application/json': { schema: { $ref: '#/components/schemas/Membership' } } } }, '401': { description: 'Chưa đăng nhập' }, '403': { description: 'Chỉ member được truy cập' }, '404': { description: 'Không tìm thấy gói' }, '409': { description: 'Gói không khả dụng hoặc trùng membership bộ môn' }, '422': { description: 'Dữ liệu không hợp lệ' } },
       },
     },
     '/api/packages': {

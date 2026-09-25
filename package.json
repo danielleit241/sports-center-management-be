@@ -9,10 +9,12 @@
     "start": "node dist/server.js",
     "lint": "eslint .",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run",
+    "test": "tsx scripts/prepare-test-db.ts integration && vitest run",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "test:e2e:server": "tsx scripts/prepare-test-db.ts e2e-server",
+    "test:migration": "tsx scripts/verify-membership-migration.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",

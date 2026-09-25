@@ -36,12 +36,6 @@ async function main() {
   })
 
   const now = new Date()
-  const membership = await prisma.membership.findFirst({ where: { userId: member.id } })
-  if (!membership) {
-    await prisma.membership.create({
-      data: { userId: member.id, startDate: new Date(now.getTime() - 24 * 60 * 60 * 1000), endDate: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000) },
-    })
-  }
 
   let classSchedule = await prisma.classSchedule.findFirst({ where: { courseName: 'Functional Strength' } })
   if (!classSchedule) {
@@ -110,6 +104,22 @@ async function main() {
       create: pkg,
     })
   }
+
+  const yoga = await prisma.membershipPackage.findUniqueOrThrow({ where: { code: 'PKG-YOGA-3M' } })
+  const membership = await prisma.membership.findFirst({ where: { userId: member.id }, orderBy: { id: 'asc' } })
+  const startDate = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  const membershipData = {
+    packageId: yoga.id,
+    packageNameSnapshot: yoga.name,
+    sportTypeSnapshot: yoga.sportType,
+    durationDaysSnapshot: yoga.durationDays,
+    listedPriceSnapshot: yoga.price,
+    startDate,
+    endDate: new Date(startDate.getTime() + yoga.durationDays * 24 * 60 * 60 * 1000),
+    status: 'ACTIVE' as const,
+  }
+  if (membership) await prisma.membership.update({ where: { id: membership.id }, data: membershipData })
+  else await prisma.membership.create({ data: { userId: member.id, ...membershipData } })
 }
 
 main().finally(() => prisma.$disconnect())
