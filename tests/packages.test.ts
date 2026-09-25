@@ -104,6 +104,13 @@ describe('FR-003 Membership Package Management', () => {
     const testInactive = body.find((p) => p.code === 'TEST-INACT-1')
     expect(testActive).toBeDefined()
     expect(testInactive).toBeUndefined()
+
+    const member = await createMember('fr003-catalog-member@sports-center.local')
+    const memberOverride = await request('/api/packages?status=INACTIVE', member.token)
+    expect((await memberOverride.json() as Array<{ code: string }>).some((pkg) => pkg.code === 'TEST-INACT-1')).toBe(false)
+    const manager = await createManager('fr003-catalog-manager@sports-center.local')
+    const managerFilter = await request('/api/packages?status=INACTIVE', manager.token)
+    expect((await managerFilter.json() as Array<{ code: string }>).some((pkg) => pkg.code === 'TEST-INACT-1')).toBe(true)
   })
 
   it('rejects package creation from unauthenticated or non-manager users', async () => {
